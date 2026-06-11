@@ -70,6 +70,12 @@ SENSORS: tuple[BridgeSensorDescription, ...] = (
         value_fn=lambda data: data.get("last_command_count") or 0,
         icon="mdi:playlist-check",
     ),
+    BridgeSensorDescription(
+        key="last_error",
+        name="Ostatni blad",
+        value_fn=lambda data: data.get("last_error") or "brak",
+        icon="mdi:alert-circle-outline",
+    ),
 )
 
 

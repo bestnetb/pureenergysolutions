@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "pd_dashboard_bridge"
-APP_VERSION = "0.1.8"
+APP_VERSION = "0.1.9"
 
 CONF_PANEL_URL = "panel_url"
 CONF_PAIRING_CODE = "pairing_code"
@@ -24,3 +24,4 @@ DEFAULT_SEND_ALL_ENTITIES = True
 MIN_HEARTBEAT_INTERVAL = 15
 MIN_ENTITIES_INTERVAL = 60
 MAX_ENTITY_ATTRIBUTES_DEPTH = 3
+ENTITY_BATCH_SIZE = 100

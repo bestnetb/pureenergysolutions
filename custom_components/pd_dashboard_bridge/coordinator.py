@@ -28,6 +28,7 @@ from .const import (
     DEFAULT_HEARTBEAT_INTERVAL,
     DEFAULT_SEND_ALL_ENTITIES,
     DOMAIN,
+    ENTITY_BATCH_SIZE,
     MAX_ENTITY_ATTRIBUTES_DEPTH,
     MIN_ENTITIES_INTERVAL,
     MIN_HEARTBEAT_INTERVAL,
@@ -156,16 +157,7 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "message": "Home Assistant nie zwrocil jeszcze encji; proba zostanie ponowiona.",
             }
 
-        result = await self.client.entities(
-            {
-                "app_version": APP_VERSION,
-                "ha_version": HA_VERSION,
-                "instance_id": self.instance_id,
-                "instance_name": self.instance_name,
-                "location_name": self.location_name,
-                "entities": entities,
-            }
-        )
+        result = await self._send_entities_in_batches(entities)
         self._last_entities_sync = now
         self.last_entities_at = now.isoformat()
         self.last_entities_stored = int(result.get("stored") or 0)
@@ -173,6 +165,49 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.last_error = str(result.get("message") or "Encje wymagaja ponownego parowania.")
 
         return result
+
+    async def _send_entities_in_batches(
+        self,
+        entities: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Send entity states in small batches to avoid large POST failures."""
+
+        batch_count = (len(entities) + ENTITY_BATCH_SIZE - 1) // ENTITY_BATCH_SIZE
+        total_received = 0
+        total_skipped = 0
+        total_stored = 0
+        last_result: dict[str, Any] = {}
+
+        for batch_index, start in enumerate(
+            range(0, len(entities), ENTITY_BATCH_SIZE),
+            start=1,
+        ):
+            batch = entities[start : start + ENTITY_BATCH_SIZE]
+            result = await self.client.entities(
+                {
+                    "app_version": APP_VERSION,
+                    "ha_version": HA_VERSION,
+                    "instance_id": self.instance_id,
+                    "instance_name": self.instance_name,
+                    "location_name": self.location_name,
+                    "entity_total": len(entities),
+                    "batch_index": batch_index,
+                    "batch_count": batch_count,
+                    "entities": batch,
+                }
+            )
+            last_result = result
+            total_received += int(result.get("received") or len(batch))
+            total_skipped += int(result.get("skipped") or 0)
+            total_stored += int(result.get("stored") or 0)
+
+        return {
+            **last_result,
+            "received": total_received,
+            "skipped": total_skipped,
+            "stored": total_stored,
+            "batch_count": batch_count,
+        }
 
     def _build_entities_payload(self) -> list[dict[str, Any]]:
         """Build entity state payload from Home Assistant state machine."""
