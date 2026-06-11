@@ -93,6 +93,9 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 {
                     "app_version": APP_VERSION,
                     "ha_version": HA_VERSION,
+                    "instance_id": self.instance_id,
+                    "instance_name": self.instance_name,
+                    "location_name": self.location_name,
                     "entity_count": self.entity_count,
                     "last_entities_at": self.last_entities_at,
                     "supports_commands": True,
@@ -129,11 +132,11 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _should_send_entities(self, now: datetime) -> bool:
         """Return true when entity states should be sent now."""
 
-        if not self.send_all_entities:
-            return False
-
         if self.last_entities_at is None:
             return True
+
+        if not self.send_all_entities:
+            return False
 
         return (
             self._last_entities_sync is None
@@ -144,17 +147,30 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Send all HA entity states to the dashboard."""
 
         entities = self._build_entities_payload()
+        self.entity_count = len(entities)
+        if not entities:
+            return {
+                "ok": True,
+                "received": 0,
+                "stored": 0,
+                "message": "Home Assistant nie zwrocil jeszcze encji; proba zostanie ponowiona.",
+            }
+
         result = await self.client.entities(
             {
                 "app_version": APP_VERSION,
                 "ha_version": HA_VERSION,
+                "instance_id": self.instance_id,
+                "instance_name": self.instance_name,
+                "location_name": self.location_name,
                 "entities": entities,
             }
         )
         self._last_entities_sync = now
-        self.entity_count = len(entities)
         self.last_entities_at = now.isoformat()
         self.last_entities_stored = int(result.get("stored") or 0)
+        if result.get("requires_pairing") or result.get("status") == "auth_failed":
+            self.last_error = str(result.get("message") or "Encje wymagaja ponownego parowania.")
 
         return result
 
@@ -192,10 +208,14 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return {
             "status": status,
+            "app_version": APP_VERSION,
+            "ha_version": HA_VERSION,
             "instance_id": self.instance_id,
             "instance_name": self.instance_name,
             "location_name": self.location_name,
             "panel_url": self.panel_url,
+            "send_all_entities": self.send_all_entities,
+            "entities_interval_seconds": int(self.entities_interval.total_seconds()),
             "entity_count": self.entity_count,
             "last_heartbeat_at": self.last_heartbeat_at,
             "last_entities_at": self.last_entities_at,

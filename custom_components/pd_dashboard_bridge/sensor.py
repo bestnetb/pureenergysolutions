@@ -35,6 +35,12 @@ SENSORS: tuple[BridgeSensorDescription, ...] = (
         icon="mdi:cloud-sync",
     ),
     BridgeSensorDescription(
+        key="app_version",
+        name="Wersja aplikacji",
+        value_fn=lambda data: data.get("app_version") or "unknown",
+        icon="mdi:package-variant",
+    ),
+    BridgeSensorDescription(
         key="entity_count",
         name="Liczba encji",
         value_fn=lambda data: data.get("entity_count") or 0,
@@ -120,8 +126,12 @@ class BridgeSensor(CoordinatorEntity[PDDashboardBridgeCoordinator], SensorEntity
         data = self.coordinator.data or {}
         return {
             "panel_url": data.get("panel_url"),
+            "app_version": data.get("app_version"),
+            "ha_version": data.get("ha_version"),
             "instance_id": data.get("instance_id"),
             "instance_name": data.get("instance_name"),
             "location_name": data.get("location_name"),
+            "send_all_entities": data.get("send_all_entities"),
+            "entities_interval_seconds": data.get("entities_interval_seconds"),
             "last_error": data.get("last_error"),
         }
