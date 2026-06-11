@@ -9,11 +9,13 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import DashboardApiClient, DashboardApiError
+from .api import DashboardApiClient, DashboardApiError, DashboardAuthError
 from .const import (
+    APP_VERSION,
     CONF_AGENT_TOKEN,
     CONF_ENDPOINTS,
     CONF_ENTITIES_INTERVAL,
@@ -90,7 +92,7 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             heartbeat = await self.client.heartbeat(
                 {
-                    "app_version": "0.1.0",
+                    "app_version": APP_VERSION,
                     "ha_version": HA_VERSION,
                     "entity_count": self.entity_count,
                     "last_entities_at": self.last_entities_at,
@@ -107,6 +109,9 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             self.last_error = None
             return self._state_payload(heartbeat, entities_result)
+        except DashboardAuthError as err:
+            self.last_error = str(err)
+            raise ConfigEntryAuthFailed(str(err)) from err
         except DashboardApiError as err:
             self.last_error = str(err)
             raise UpdateFailed(str(err)) from err
@@ -128,7 +133,7 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entities = self._build_entities_payload()
         result = await self.client.entities(
             {
-                "app_version": "0.1.0",
+                "app_version": APP_VERSION,
                 "ha_version": HA_VERSION,
                 "entities": entities,
             }

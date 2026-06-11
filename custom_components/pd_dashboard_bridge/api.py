@@ -7,6 +7,8 @@ from typing import Any
 
 from aiohttp import ClientError, ClientResponseError, ClientSession
 
+from .const import APP_VERSION
+
 
 class DashboardApiError(Exception):
     """Base error raised by the dashboard API client."""
@@ -73,7 +75,7 @@ class DashboardApiClient:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "pd-dashboard-bridge/0.1.0",
+            "User-Agent": f"pd-dashboard-bridge/{APP_VERSION}",
         }
         if include_token and self.agent_token:
             headers["Authorization"] = f"Bearer {self.agent_token}"

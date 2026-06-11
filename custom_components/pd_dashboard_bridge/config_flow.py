@@ -19,6 +19,7 @@ from .api import (
     normalize_panel_url,
 )
 from .const import (
+    APP_VERSION,
     CONF_AGENT_TOKEN,
     CONF_ENDPOINTS,
     CONF_ENTITIES_INTERVAL,
@@ -60,7 +61,7 @@ class PDDashboardBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 result = await client.pair(
                     pairing_code,
-                    app_version="0.1.0",
+                    app_version=APP_VERSION,
                     ha_version=HA_VERSION,
                 )
             except DashboardAuthError:
@@ -144,13 +145,14 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
             panel_url = normalize_panel_url(str(user_input[CONF_PANEL_URL]))
             pairing_code = str(user_input.get(CONF_PAIRING_CODE) or "").strip()
             entry_data = dict(data)
+            should_reload = False
 
             if pairing_code:
                 client = DashboardApiClient(async_get_clientsession(self.hass), panel_url)
                 try:
                     result = await client.pair(
                         pairing_code,
-                        app_version="0.1.0",
+                        app_version=APP_VERSION,
                         ha_version=HA_VERSION,
                     )
                 except DashboardAuthError:
@@ -178,6 +180,7 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
                         title=str(result.get("instance_name") or self.config_entry.title),
                         data=entry_data,
                     )
+                    should_reload = True
             else:
                 entry_data[CONF_PANEL_URL] = panel_url
                 if entry_data != data:
@@ -185,8 +188,14 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
                         self.config_entry,
                         data=entry_data,
                     )
+                    should_reload = True
 
             if not errors:
+                if should_reload:
+                    self.hass.async_create_task(
+                        self.hass.config_entries.async_reload(self.config_entry.entry_id)
+                    )
+
                 return self.async_create_entry(
                     title="",
                     data={

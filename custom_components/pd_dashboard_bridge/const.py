@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "pd_dashboard_bridge"
+APP_VERSION = "0.1.2"
 
 CONF_PANEL_URL = "panel_url"
 CONF_PAIRING_CODE = "pairing_code"
