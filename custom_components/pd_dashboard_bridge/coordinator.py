@@ -56,7 +56,7 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_entities_stored = 0
         self.last_command_count = 0
         self.last_error: str | None = None
-        self._last_entities_sync: datetime | None = None
+        self._last_entities_sync: datetime | None = datetime.now(timezone.utc)
 
         heartbeat_interval = max(
             MIN_HEARTBEAT_INTERVAL,
