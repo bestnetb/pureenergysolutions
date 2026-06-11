@@ -103,11 +103,17 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.last_command_count = len(heartbeat.get("commands") or [])
 
             if self._should_send_entities(now):
-                entities_result = await self._send_entities(now)
+                try:
+                    entities_result = await self._send_entities(now)
+                except DashboardApiError as err:
+                    LOGGER.warning("Cannot send PD Dashboard entities: %s", err)
+                    self.last_error = f"Encje: {err}"
+                    entities_result = {"ok": False, "message": str(err)}
             else:
                 entities_result = None
 
-            self.last_error = None
+            if entities_result is None or entities_result.get("ok", True):
+                self.last_error = None
             return self._state_payload(heartbeat, entities_result)
         except DashboardAuthError as err:
             self.last_error = str(err)
