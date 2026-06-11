@@ -126,16 +126,11 @@ class PDDashboardBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
 
-        return PDDashboardBridgeOptionsFlow(config_entry)
+        return PDDashboardBridgeOptionsFlow()
 
 
 class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
     """Handle integration options."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-
-        self.config_entry = config_entry
 
     async def async_step_init(
         self,
@@ -143,14 +138,76 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
     ) -> dict[str, Any]:
         """Manage integration options."""
 
+        errors: dict[str, str] = {}
+        data = self.config_entry.data
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            panel_url = normalize_panel_url(str(user_input[CONF_PANEL_URL]))
+            pairing_code = str(user_input.get(CONF_PAIRING_CODE) or "").strip()
+            entry_data = dict(data)
+
+            if pairing_code:
+                client = DashboardApiClient(async_get_clientsession(self.hass), panel_url)
+                try:
+                    result = await client.pair(
+                        pairing_code,
+                        app_version="0.1.0",
+                        ha_version=HA_VERSION,
+                    )
+                except DashboardAuthError:
+                    errors["base"] = "invalid_pairing_code"
+                except DashboardCannotConnect:
+                    errors["base"] = "cannot_connect"
+                except DashboardApiError:
+                    errors["base"] = "unknown"
+                else:
+                    instance_id = int(result.get("instance_id") or 0)
+                    entry_data.update(
+                        {
+                            CONF_PANEL_URL: panel_url,
+                            CONF_AGENT_TOKEN: str(result["agent_token"]),
+                            CONF_INSTANCE_ID: instance_id,
+                            CONF_INSTANCE_NAME: str(
+                                result.get("instance_name") or "Home Assistant"
+                            ),
+                            CONF_LOCATION_NAME: str(result.get("location_name") or ""),
+                            CONF_ENDPOINTS: dict(result.get("endpoints") or {}),
+                        }
+                    )
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry,
+                        title=str(result.get("instance_name") or self.config_entry.title),
+                        data=entry_data,
+                    )
+            else:
+                entry_data[CONF_PANEL_URL] = panel_url
+                if entry_data != data:
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry,
+                        data=entry_data,
+                    )
+
+            if not errors:
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        CONF_HEARTBEAT_INTERVAL: int(
+                            user_input[CONF_HEARTBEAT_INTERVAL]
+                        ),
+                        CONF_ENTITIES_INTERVAL: int(user_input[CONF_ENTITIES_INTERVAL]),
+                        CONF_SEND_ALL_ENTITIES: bool(user_input[CONF_SEND_ALL_ENTITIES]),
+                    },
+                )
 
         options = self.config_entry.options
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
+                    vol.Required(
+                        CONF_PANEL_URL,
+                        default=data.get(CONF_PANEL_URL, DEFAULT_PANEL_URL),
+                    ): str,
+                    vol.Optional(CONF_PAIRING_CODE, default=""): str,
                     vol.Required(
                         CONF_HEARTBEAT_INTERVAL,
                         default=options.get(
@@ -174,4 +231,5 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
                     ): bool,
                 }
             ),
+            errors=errors,
         )

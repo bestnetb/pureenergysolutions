@@ -26,12 +26,20 @@
     "step": {
       "init": {
         "title": "PD Dashboard Bridge",
+        "description": "Zmien ustawienia wysylki danych. Jezeli panel pokazuje blad tokenu, wygeneruj w panelu nowy kod parowania dla tej instancji HA i wpisz go tutaj.",
         "data": {
+          "panel_url": "Adres panelu",
+          "pairing_code": "Nowy kod parowania (opcjonalnie)",
           "heartbeat_interval": "Heartbeat co ile sekund",
           "entities_interval": "Wysylka encji co ile sekund",
           "send_all_entities": "Wysylaj wszystkie encje do panelu"
         }
       }
+    },
+    "error": {
+      "cannot_connect": "Nie mozna polaczyc sie z panelem.",
+      "invalid_pairing_code": "Kod parowania jest niepoprawny albo zostal juz uzyty.",
+      "unknown": "Panel odrzucil ponowne parowanie."
     }
   }
 }
