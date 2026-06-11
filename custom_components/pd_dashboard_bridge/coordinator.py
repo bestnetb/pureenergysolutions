@@ -9,7 +9,6 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -117,7 +116,12 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return self._state_payload(heartbeat, entities_result)
         except DashboardAuthError as err:
             self.last_error = str(err)
-            raise ConfigEntryAuthFailed(str(err)) from err
+            LOGGER.warning("PD Dashboard agent token was rejected: %s", err)
+            return self._state_payload(
+                {"ok": False, "message": str(err)},
+                None,
+                status="auth_failed",
+            )
         except DashboardApiError as err:
             self.last_error = str(err)
             raise UpdateFailed(str(err)) from err
@@ -178,11 +182,13 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         heartbeat: dict[str, Any] | None,
         entities_result: dict[str, Any] | None,
+        *,
+        status: str = "online",
     ) -> dict[str, Any]:
         """Return data exposed by diagnostic sensors."""
 
         return {
-            "status": "online",
+            "status": status,
             "instance_id": self.instance_id,
             "instance_name": self.instance_name,
             "location_name": self.location_name,
