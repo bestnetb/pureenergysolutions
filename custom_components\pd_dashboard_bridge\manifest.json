@@ -1,0 +1,11 @@
+{
+  "domain": "pd_dashboard_bridge",
+  "name": "PD Dashboard Bridge",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://pd.best-net.pl/login/",
+  "issue_tracker": "https://github.com/bestnetb/pureenergysolutions/issues",
+  "iot_class": "cloud_push",
+  "requirements": [],
+  "version": "0.1.0"
+}

@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "PD Dashboard Bridge",
+        "description": "Sparuj te instancje Home Assistant z panelem PD. Kod parowania utworzysz w panelu administratora: Konfiguracja -> Panel wielu Home Assistant -> Dodaj instancje HA.",
+        "data": {
+          "panel_url": "Adres panelu",
+          "pairing_code": "Jednorazowy kod parowania",
+          "heartbeat_interval": "Heartbeat co ile sekund",
+          "entities_interval": "Wysylka encji co ile sekund",
+          "send_all_entities": "Wysylaj wszystkie encje do panelu"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nie mozna polaczyc sie z panelem.",
+      "invalid_pairing_code": "Kod parowania jest niepoprawny albo zostal juz uzyty.",
+      "unknown": "Panel odrzucil parowanie."
+    },
+    "abort": {
+      "already_configured": "Ta instancja Home Assistant jest juz sparowana."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "PD Dashboard Bridge",
+        "data": {
+          "heartbeat_interval": "Heartbeat co ile sekund",
+          "entities_interval": "Wysylka encji co ile sekund",
+          "send_all_entities": "Wysylaj wszystkie encje do panelu"
+        }
+      }
+    }
+  }
+}
