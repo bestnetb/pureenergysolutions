@@ -11,6 +11,14 @@
           "entities_interval": "Wysylka encji co ile sekund",
           "send_all_entities": "Wysylaj wszystkie encje do panelu"
         }
+      },
+      "reauth_confirm": {
+        "title": "Napraw token PD Dashboard Bridge",
+        "description": "Token aplikacji HA zostal odrzucony przez panel. Wygeneruj w panelu nowy kod parowania dla tej samej instancji HA i wpisz go tutaj.",
+        "data": {
+          "panel_url": "Adres panelu",
+          "pairing_code": "Nowy kod parowania"
+        }
       }
     },
     "error": {
@@ -19,7 +27,8 @@
       "unknown": "Panel odrzucil parowanie."
     },
     "abort": {
-      "already_configured": "Ta instancja Home Assistant jest juz sparowana."
+      "already_configured": "Ta instancja Home Assistant jest juz sparowana.",
+      "reauth_successful": "Token aplikacji HA zostal odnowiony."
     }
   },
   "options": {

@@ -40,6 +40,34 @@ from .const import (
 )
 
 
+async def _async_pair(
+    hass,
+    panel_url: str,
+    pairing_code: str,
+) -> dict[str, Any]:
+    """Pair with the dashboard and return the API payload."""
+
+    client = DashboardApiClient(async_get_clientsession(hass), panel_url)
+    return await client.pair(
+        pairing_code,
+        app_version=APP_VERSION,
+        ha_version=HA_VERSION,
+    )
+
+
+def _entry_data_from_pairing(panel_url: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Build config entry data from a successful pairing payload."""
+
+    return {
+        CONF_PANEL_URL: panel_url,
+        CONF_AGENT_TOKEN: str(result["agent_token"]),
+        CONF_INSTANCE_ID: int(result.get("instance_id") or 0),
+        CONF_INSTANCE_NAME: str(result.get("instance_name") or "Home Assistant"),
+        CONF_LOCATION_NAME: str(result.get("location_name") or ""),
+        CONF_ENDPOINTS: dict(result.get("endpoints") or {}),
+    }
+
+
 class PDDashboardBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for PD Dashboard Bridge."""
 
@@ -56,14 +84,9 @@ class PDDashboardBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             panel_url = normalize_panel_url(str(user_input[CONF_PANEL_URL]))
             pairing_code = str(user_input[CONF_PAIRING_CODE]).strip()
-            client = DashboardApiClient(async_get_clientsession(self.hass), panel_url)
 
             try:
-                result = await client.pair(
-                    pairing_code,
-                    app_version=APP_VERSION,
-                    ha_version=HA_VERSION,
-                )
+                result = await _async_pair(self.hass, panel_url, pairing_code)
             except DashboardAuthError:
                 errors["base"] = "invalid_pairing_code"
             except DashboardCannotConnect:
@@ -78,16 +101,7 @@ class PDDashboardBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 return self.async_create_entry(
                     title=str(result.get("instance_name") or "PD Dashboard Bridge"),
-                    data={
-                        CONF_PANEL_URL: panel_url,
-                        CONF_AGENT_TOKEN: str(result["agent_token"]),
-                        CONF_INSTANCE_ID: instance_id,
-                        CONF_INSTANCE_NAME: str(
-                            result.get("instance_name") or "Home Assistant"
-                        ),
-                        CONF_LOCATION_NAME: str(result.get("location_name") or ""),
-                        CONF_ENDPOINTS: dict(result.get("endpoints") or {}),
-                    },
+                    data=_entry_data_from_pairing(panel_url, result),
                     options={
                         CONF_HEARTBEAT_INTERVAL: int(
                             user_input[CONF_HEARTBEAT_INTERVAL]
@@ -115,6 +129,65 @@ class PDDashboardBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_SEND_ALL_ENTITIES,
                         default=DEFAULT_SEND_ALL_ENTITIES,
                     ): bool,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_reauth(
+        self,
+        entry_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Handle reauthentication when the stored agent token is rejected."""
+
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Repair the stored agent token with a fresh pairing code."""
+
+        errors: dict[str, str] = {}
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        current_data = dict(entry.data) if entry is not None else {}
+
+        if user_input is not None:
+            panel_url = normalize_panel_url(str(user_input[CONF_PANEL_URL]))
+            pairing_code = str(user_input[CONF_PAIRING_CODE]).strip()
+
+            try:
+                result = await _async_pair(self.hass, panel_url, pairing_code)
+            except DashboardAuthError:
+                errors["base"] = "invalid_pairing_code"
+            except DashboardCannotConnect:
+                errors["base"] = "cannot_connect"
+            except DashboardApiError:
+                errors["base"] = "unknown"
+            else:
+                if entry is None:
+                    return self.async_abort(reason="unknown")
+
+                new_data = current_data | _entry_data_from_pairing(panel_url, result)
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    title=str(result.get("instance_name") or entry.title),
+                    data=new_data,
+                )
+                self.hass.async_create_task(
+                    self.hass.config_entries.async_reload(entry.entry_id)
+                )
+                return self.async_abort(reason="reauth_successful")
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_PANEL_URL,
+                        default=current_data.get(CONF_PANEL_URL, DEFAULT_PANEL_URL),
+                    ): str,
+                    vol.Required(CONF_PAIRING_CODE): str,
                 }
             ),
             errors=errors,
@@ -148,13 +221,8 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
             should_reload = False
 
             if pairing_code:
-                client = DashboardApiClient(async_get_clientsession(self.hass), panel_url)
                 try:
-                    result = await client.pair(
-                        pairing_code,
-                        app_version=APP_VERSION,
-                        ha_version=HA_VERSION,
-                    )
+                    result = await _async_pair(self.hass, panel_url, pairing_code)
                 except DashboardAuthError:
                     errors["base"] = "invalid_pairing_code"
                 except DashboardCannotConnect:
@@ -162,18 +230,8 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
                 except DashboardApiError:
                     errors["base"] = "unknown"
                 else:
-                    instance_id = int(result.get("instance_id") or 0)
                     entry_data.update(
-                        {
-                            CONF_PANEL_URL: panel_url,
-                            CONF_AGENT_TOKEN: str(result["agent_token"]),
-                            CONF_INSTANCE_ID: instance_id,
-                            CONF_INSTANCE_NAME: str(
-                                result.get("instance_name") or "Home Assistant"
-                            ),
-                            CONF_LOCATION_NAME: str(result.get("location_name") or ""),
-                            CONF_ENDPOINTS: dict(result.get("endpoints") or {}),
-                        }
+                        _entry_data_from_pairing(panel_url, result)
                     )
                     self.hass.config_entries.async_update_entry(
                         self.config_entry,
