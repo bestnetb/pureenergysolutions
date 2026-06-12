@@ -54,6 +54,7 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_heartbeat_at: str | None = None
         self.last_entities_at: str | None = None
         self.last_entities_stored = 0
+        self.last_sent_entities: list[str] = []
         self.last_command_count = 0
         self.last_error: str | None = None
         self._last_entities_sync: datetime | None = None
@@ -157,7 +158,8 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "message": "Home Assistant nie zwrocil jeszcze encji; proba zostanie ponowiona.",
             }
 
-        result = await self._send_entities_in_batches(entities)
+        sync_id = now.isoformat()
+        result = await self._send_entities_in_batches(entities, sync_id)
         self._last_entities_sync = now
         self.last_entities_at = now.isoformat()
         self.last_entities_stored = int(result.get("stored") or 0)
@@ -169,6 +171,7 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _send_entities_in_batches(
         self,
         entities: list[dict[str, Any]],
+        sync_id: str,
     ) -> dict[str, Any]:
         """Send entity states in small batches to avoid large POST failures."""
 
@@ -191,6 +194,7 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "instance_name": self.instance_name,
                     "location_name": self.location_name,
                     "entity_total": len(entities),
+                    "sync_id": sync_id,
                     "batch_index": batch_index,
                     "batch_count": batch_count,
                     "entities": batch,
@@ -215,6 +219,9 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         payload: list[dict[str, Any]] = []
 
         for state in self.hass.states.async_all():
+            if not _state_has_data(state.entity_id, state.state):
+                continue
+
             attributes = dict(state.attributes)
             payload.append(
                 {
@@ -229,6 +236,8 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "attributes": _json_safe(attributes),
                 }
             )
+
+        self.last_sent_entities = [item["entity_id"] for item in payload]
 
         return payload
 
@@ -252,6 +261,8 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "send_all_entities": self.send_all_entities,
             "entities_interval_seconds": int(self.entities_interval.total_seconds()),
             "entity_count": self.entity_count,
+            "sent_entity_count": len(self.last_sent_entities),
+            "sent_entities": self.last_sent_entities,
             "last_heartbeat_at": self.last_heartbeat_at,
             "last_entities_at": self.last_entities_at,
             "last_entities_stored": self.last_entities_stored,
@@ -260,6 +271,17 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "entities_result": entities_result or {},
             "last_error": self.last_error,
         }
+
+
+def _state_has_data(entity_id: str, value: Any) -> bool:
+    """Return true when a state has usable data for the dashboard."""
+
+    domain = entity_id.split(".", 1)[0].lower()
+    if domain != "sensor":
+        return False
+
+    state = str(value or "").strip().lower()
+    return state not in {"", "unknown", "unavailable", "none"}
 
 
 def _json_safe(value: Any, depth: int = MAX_ENTITY_ATTRIBUTES_DEPTH) -> Any:

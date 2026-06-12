@@ -47,6 +47,12 @@ SENSORS: tuple[BridgeSensorDescription, ...] = (
         icon="mdi:counter",
     ),
     BridgeSensorDescription(
+        key="sent_entities",
+        name="Wysylane encje",
+        value_fn=lambda data: data.get("sent_entity_count") or len(data.get("sent_entities") or []),
+        icon="mdi:format-list-bulleted",
+    ),
+    BridgeSensorDescription(
         key="last_heartbeat_at",
         name="Ostatni heartbeat",
         value_fn=lambda data: data.get("last_heartbeat_at") or "brak",
@@ -139,5 +145,7 @@ class BridgeSensor(CoordinatorEntity[PDDashboardBridgeCoordinator], SensorEntity
             "location_name": data.get("location_name"),
             "send_all_entities": data.get("send_all_entities"),
             "entities_interval_seconds": data.get("entities_interval_seconds"),
+            "sent_entity_count": data.get("sent_entity_count"),
+            "sent_entities": data.get("sent_entities") or [],
             "last_error": data.get("last_error"),
         }
