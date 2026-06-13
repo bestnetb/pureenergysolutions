@@ -36,6 +36,7 @@ from .const import (
 )
 
 LOGGER = logging.getLogger(__name__)
+STATE_DOMAINS_WITH_DATA = {"sensor", "select", "input_select"}
 
 
 class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -303,7 +304,7 @@ def _state_has_data(entity_id: str, value: Any) -> bool:
     """Return true when a state has usable data for the dashboard."""
 
     domain = entity_id.split(".", 1)[0].lower()
-    if domain != "sensor":
+    if domain not in STATE_DOMAINS_WITH_DATA:
         return False
 
     state = str(value or "").strip().lower()
