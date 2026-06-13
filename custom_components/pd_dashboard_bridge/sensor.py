@@ -158,4 +158,12 @@ class BridgeSensor(CoordinatorEntity[PDDashboardBridgeCoordinator], SensorEntity
                 }
             )
 
+        if self._description.key in {"status", "last_error"}:
+            attributes.update(
+                {
+                    "heartbeat": data.get("heartbeat") or {},
+                    "entities_result": data.get("entities_result") or {},
+                }
+            )
+
         return attributes

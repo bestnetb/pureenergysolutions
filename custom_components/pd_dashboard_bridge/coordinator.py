@@ -108,7 +108,10 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.last_heartbeat_at = now.isoformat()
             self.last_command_count = len(heartbeat.get("commands") or [])
             if heartbeat.get("requires_pairing") or heartbeat.get("status") == "auth_failed":
-                self.last_error = str(heartbeat.get("message") or "Heartbeat wymaga ponownego parowania.")
+                self.last_error = _diagnostic_error(
+                    heartbeat,
+                    "Heartbeat wymaga ponownego parowania.",
+                )
                 return self._state_payload(heartbeat, None, status="auth_failed")
 
             if self._should_send_entities(now):
@@ -300,6 +303,24 @@ def _state_has_data(entity_id: str, value: Any) -> bool:
 
     state = str(value or "").strip().lower()
     return state not in {"", "unknown", "unavailable", "none"}
+
+
+def _diagnostic_error(response: dict[str, Any], fallback: str) -> str:
+    """Return a compact error with server-side auth diagnostics when present."""
+
+    message = str(response.get("message") or fallback)
+    debug = response.get("auth_debug")
+    if not isinstance(debug, dict):
+        return message
+
+    parts = [
+        f"token={debug.get('received_token_fingerprint') or 'brak'}",
+        f"payload_id={debug.get('payload_instance_id') or 0}",
+        f"panel_id={debug.get('panel_instance_id') or 0}",
+        f"panel_token={debug.get('panel_agent_token_fingerprint') or 'brak'}",
+    ]
+
+    return f"{message} ({', '.join(parts)})"
 
 
 def _entity_diagnostic_detail(item: dict[str, Any]) -> dict[str, Any]:

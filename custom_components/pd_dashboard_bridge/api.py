@@ -79,6 +79,7 @@ class DashboardApiClient:
         }
         if include_token and self.agent_token:
             headers["Authorization"] = f"Bearer {self.agent_token}"
+            headers["X-HA-Agent-Token"] = self.agent_token
 
         try:
             async with asyncio.timeout(25):
