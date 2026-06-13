@@ -106,6 +106,9 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             self.last_heartbeat_at = now.isoformat()
             self.last_command_count = len(heartbeat.get("commands") or [])
+            if heartbeat.get("requires_pairing") or heartbeat.get("status") == "auth_failed":
+                self.last_error = str(heartbeat.get("message") or "Heartbeat wymaga ponownego parowania.")
+                return self._state_payload(heartbeat, None, status="auth_failed")
 
             if self._should_send_entities(now):
                 try:
@@ -116,6 +119,12 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     entities_result = {"ok": False, "message": str(err)}
             else:
                 entities_result = None
+
+            if entities_result and (
+                entities_result.get("requires_pairing")
+                or entities_result.get("status") == "auth_failed"
+            ):
+                return self._state_payload(heartbeat, entities_result, status="auth_failed")
 
             if entities_result is None or entities_result.get("ok", True):
                 self.last_error = None
