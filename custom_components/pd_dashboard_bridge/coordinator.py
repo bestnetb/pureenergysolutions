@@ -55,6 +55,7 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_entities_at: str | None = None
         self.last_entities_stored = 0
         self.last_sent_entities: list[str] = []
+        self.last_sent_entity_details: list[dict[str, Any]] = []
         self.last_command_count = 0
         self.last_error: str | None = None
         self._last_entities_sync: datetime | None = None
@@ -238,6 +239,9 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         self.last_sent_entities = [item["entity_id"] for item in payload]
+        self.last_sent_entity_details = [
+            _entity_diagnostic_detail(item) for item in payload
+        ]
 
         return payload
 
@@ -263,6 +267,10 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "entity_count": self.entity_count,
             "sent_entity_count": len(self.last_sent_entities),
             "sent_entities": self.last_sent_entities,
+            "sent_entity_details": self.last_sent_entity_details,
+            "sent_entities_text": [
+                _entity_diagnostic_text(item) for item in self.last_sent_entity_details
+            ],
             "last_heartbeat_at": self.last_heartbeat_at,
             "last_entities_at": self.last_entities_at,
             "last_entities_stored": self.last_entities_stored,
@@ -282,6 +290,35 @@ def _state_has_data(entity_id: str, value: Any) -> bool:
 
     state = str(value or "").strip().lower()
     return state not in {"", "unknown", "unavailable", "none"}
+
+
+def _entity_diagnostic_detail(item: dict[str, Any]) -> dict[str, Any]:
+    """Return concise details for the HA diagnostic attributes."""
+
+    state = str(item.get("state") or "")
+    unit = item.get("unit")
+    value = f"{state} {unit}".strip() if unit else state
+
+    return {
+        "entity_id": item.get("entity_id"),
+        "name": item.get("name"),
+        "value": value,
+        "state": state,
+        "unit": unit,
+        "device_class": item.get("device_class"),
+        "state_class": item.get("state_class"),
+        "last_updated": item.get("last_updated"),
+    }
+
+
+def _entity_diagnostic_text(item: dict[str, Any]) -> str:
+    """Return a readable one-line entity summary for diagnostics."""
+
+    entity_id = str(item.get("entity_id") or "")
+    name = str(item.get("name") or "")
+    value = str(item.get("value") or item.get("state") or "")
+
+    return " | ".join(part for part in (entity_id, name, value) if part)
 
 
 def _json_safe(value: Any, depth: int = MAX_ENTITY_ATTRIBUTES_DEPTH) -> Any:

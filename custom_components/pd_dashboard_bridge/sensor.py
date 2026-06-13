@@ -136,7 +136,7 @@ class BridgeSensor(CoordinatorEntity[PDDashboardBridgeCoordinator], SensorEntity
         """Return useful diagnostics."""
 
         data = self.coordinator.data or {}
-        return {
+        attributes = {
             "panel_url": data.get("panel_url"),
             "app_version": data.get("app_version"),
             "ha_version": data.get("ha_version"),
@@ -146,6 +146,16 @@ class BridgeSensor(CoordinatorEntity[PDDashboardBridgeCoordinator], SensorEntity
             "send_all_entities": data.get("send_all_entities"),
             "entities_interval_seconds": data.get("entities_interval_seconds"),
             "sent_entity_count": data.get("sent_entity_count"),
-            "sent_entities": data.get("sent_entities") or [],
             "last_error": data.get("last_error"),
         }
+
+        if self._description.key == "sent_entities":
+            attributes.update(
+                {
+                    "sent_entities": data.get("sent_entities") or [],
+                    "sent_entity_details": data.get("sent_entity_details") or [],
+                    "sent_entities_text": data.get("sent_entities_text") or [],
+                }
+            )
+
+        return attributes
