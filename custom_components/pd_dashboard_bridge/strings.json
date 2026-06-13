@@ -24,6 +24,7 @@
     "error": {
       "cannot_connect": "Nie mozna polaczyc sie z panelem.",
       "invalid_pairing_code": "Kod parowania jest niepoprawny albo zostal juz uzyty.",
+      "wrong_instance": "Kod parowania nalezy do innej instancji HA. Wygeneruj kod dla tego samego wpisu.",
       "unknown": "Panel odrzucil parowanie."
     },
     "abort": {
@@ -48,6 +49,7 @@
     "error": {
       "cannot_connect": "Nie mozna polaczyc sie z panelem.",
       "invalid_pairing_code": "Kod parowania jest niepoprawny albo zostal juz uzyty.",
+      "wrong_instance": "Kod parowania nalezy do innej instancji HA. Wygeneruj kod dla tego samego wpisu.",
       "unknown": "Panel odrzucil ponowne parowanie."
     }
   }

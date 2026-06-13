@@ -68,6 +68,15 @@ def _entry_data_from_pairing(panel_url: str, result: dict[str, Any]) -> dict[str
     }
 
 
+def _pairing_matches_entry(entry_data: dict[str, Any], result: dict[str, Any]) -> bool:
+    """Return true when a fresh pairing result belongs to the same instance."""
+
+    current_id = int(entry_data.get(CONF_INSTANCE_ID) or 0)
+    paired_id = int(result.get("instance_id") or 0)
+
+    return current_id <= 0 or paired_id <= 0 or current_id == paired_id
+
+
 class PDDashboardBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for PD Dashboard Bridge."""
 
@@ -95,13 +104,29 @@ class PDDashboardBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 instance_id = int(result.get("instance_id") or 0)
+                entry_data = _entry_data_from_pairing(panel_url, result)
                 if instance_id:
                     await self.async_set_unique_id(f"pd_dashboard_bridge_{instance_id}")
-                    self._abort_if_unique_id_configured()
+                    for entry in self._async_current_entries():
+                        if (
+                            entry.unique_id == f"pd_dashboard_bridge_{instance_id}"
+                            or int(entry.data.get(CONF_INSTANCE_ID) or 0) == instance_id
+                        ):
+                            new_data = dict(entry.data)
+                            new_data.update(entry_data)
+                            self.hass.config_entries.async_update_entry(
+                                entry,
+                                title=str(result.get("instance_name") or entry.title),
+                                data=new_data,
+                            )
+                            self.hass.async_create_task(
+                                self.hass.config_entries.async_reload(entry.entry_id)
+                            )
+                            return self.async_abort(reason="reauth_successful")
 
                 return self.async_create_entry(
                     title=str(result.get("instance_name") or "PD Dashboard Bridge"),
-                    data=_entry_data_from_pairing(panel_url, result),
+                    data=entry_data,
                     options={
                         CONF_HEARTBEAT_INTERVAL: int(
                             user_input[CONF_HEARTBEAT_INTERVAL]
@@ -168,16 +193,19 @@ class PDDashboardBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if entry is None:
                     return self.async_abort(reason="unknown")
 
-                new_data = current_data | _entry_data_from_pairing(panel_url, result)
-                self.hass.config_entries.async_update_entry(
-                    entry,
-                    title=str(result.get("instance_name") or entry.title),
-                    data=new_data,
-                )
-                self.hass.async_create_task(
-                    self.hass.config_entries.async_reload(entry.entry_id)
-                )
-                return self.async_abort(reason="reauth_successful")
+                if not _pairing_matches_entry(current_data, result):
+                    errors["base"] = "wrong_instance"
+                else:
+                    new_data = current_data | _entry_data_from_pairing(panel_url, result)
+                    self.hass.config_entries.async_update_entry(
+                        entry,
+                        title=str(result.get("instance_name") or entry.title),
+                        data=new_data,
+                    )
+                    self.hass.async_create_task(
+                        self.hass.config_entries.async_reload(entry.entry_id)
+                    )
+                    return self.async_abort(reason="reauth_successful")
 
         return self.async_show_form(
             step_id="reauth_confirm",
@@ -230,15 +258,18 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
                 except DashboardApiError:
                     errors["base"] = "unknown"
                 else:
-                    entry_data.update(
-                        _entry_data_from_pairing(panel_url, result)
-                    )
-                    self.hass.config_entries.async_update_entry(
-                        self.config_entry,
-                        title=str(result.get("instance_name") or self.config_entry.title),
-                        data=entry_data,
-                    )
-                    should_reload = True
+                    if not _pairing_matches_entry(data, result):
+                        errors["base"] = "wrong_instance"
+                    else:
+                        entry_data.update(
+                            _entry_data_from_pairing(panel_url, result)
+                        )
+                        self.hass.config_entries.async_update_entry(
+                            self.config_entry,
+                            title=str(result.get("instance_name") or self.config_entry.title),
+                            data=entry_data,
+                        )
+                        should_reload = True
             else:
                 entry_data[CONF_PANEL_URL] = panel_url
                 if entry_data != data:
