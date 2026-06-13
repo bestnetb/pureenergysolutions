@@ -278,7 +278,6 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
                         ),
                         CONF_ENTITIES_INTERVAL: int(user_input[CONF_ENTITIES_INTERVAL]),
                         CONF_SEND_ALL_ENTITIES: bool(user_input[CONF_SEND_ALL_ENTITIES]),
-                        **paired_options,
                     },
                 )
 

@@ -45,20 +45,6 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self.entry = entry
         entry_config = dict(entry.data)
-        entry_config.update(
-            {
-                key: value
-                for key, value in entry.options.items()
-                if key in {
-                    CONF_PANEL_URL,
-                    CONF_AGENT_TOKEN,
-                    CONF_INSTANCE_ID,
-                    CONF_INSTANCE_NAME,
-                    CONF_LOCATION_NAME,
-                    CONF_ENDPOINTS,
-                }
-            }
-        )
         self.panel_url = str(entry_config[CONF_PANEL_URL])
         self.agent_token = str(entry_config[CONF_AGENT_TOKEN])
         self.instance_id = int(entry_config.get(CONF_INSTANCE_ID, 0))
