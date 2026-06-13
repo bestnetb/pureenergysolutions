@@ -30,6 +30,7 @@ from .const import (
     DOMAIN,
     ENTITY_BATCH_SIZE,
     MAX_ENTITY_ATTRIBUTES_DEPTH,
+    MIN_COMPLETE_ENTITY_SYNC_COUNT,
     MIN_ENTITIES_INTERVAL,
     MIN_HEARTBEAT_INTERVAL,
 )
@@ -148,6 +149,9 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _should_send_entities(self, now: datetime) -> bool:
         """Return true when entity states should be sent now."""
 
+        if self.entity_count < MIN_COMPLETE_ENTITY_SYNC_COUNT:
+            return True
+
         if self.last_entities_at is None:
             return True
 
@@ -174,7 +178,8 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         sync_id = now.isoformat()
         result = await self._send_entities_in_batches(entities, sync_id)
-        self._last_entities_sync = now
+        if len(entities) >= MIN_COMPLETE_ENTITY_SYNC_COUNT:
+            self._last_entities_sync = now
         self.last_entities_at = now.isoformat()
         self.last_entities_stored = int(result.get("stored") or 0)
         if result.get("requires_pairing") or result.get("status") == "auth_failed":
