@@ -44,12 +44,27 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Initialize the coordinator."""
 
         self.entry = entry
-        self.panel_url = str(entry.data[CONF_PANEL_URL])
-        self.agent_token = str(entry.data[CONF_AGENT_TOKEN])
-        self.instance_id = int(entry.data.get(CONF_INSTANCE_ID, 0))
-        self.instance_name = str(entry.data.get(CONF_INSTANCE_NAME) or "Home Assistant")
-        self.location_name = str(entry.data.get(CONF_LOCATION_NAME) or "")
-        self.endpoints = dict(entry.data.get(CONF_ENDPOINTS) or {})
+        entry_config = dict(entry.data)
+        entry_config.update(
+            {
+                key: value
+                for key, value in entry.options.items()
+                if key in {
+                    CONF_PANEL_URL,
+                    CONF_AGENT_TOKEN,
+                    CONF_INSTANCE_ID,
+                    CONF_INSTANCE_NAME,
+                    CONF_LOCATION_NAME,
+                    CONF_ENDPOINTS,
+                }
+            }
+        )
+        self.panel_url = str(entry_config[CONF_PANEL_URL])
+        self.agent_token = str(entry_config[CONF_AGENT_TOKEN])
+        self.instance_id = int(entry_config.get(CONF_INSTANCE_ID, 0))
+        self.instance_name = str(entry_config.get(CONF_INSTANCE_NAME) or "Home Assistant")
+        self.location_name = str(entry_config.get(CONF_LOCATION_NAME) or "")
+        self.endpoints = dict(entry_config.get(CONF_ENDPOINTS) or {})
         self.entity_count = 0
         self.last_heartbeat_at: str | None = None
         self.last_entities_at: str | None = None

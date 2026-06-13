@@ -230,6 +230,7 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
 
         errors: dict[str, str] = {}
         data = self.config_entry.data
+        paired_options: dict[str, Any] = {}
         if user_input is not None:
             panel_url = normalize_panel_url(str(user_input[CONF_PANEL_URL]))
             pairing_code = str(user_input.get(CONF_PAIRING_CODE) or "").strip()
@@ -246,9 +247,8 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
                 except DashboardApiError:
                     errors["base"] = "unknown"
                 else:
-                    entry_data.update(
-                        _entry_data_from_pairing(panel_url, result)
-                    )
+                    paired_options = _entry_data_from_pairing(panel_url, result)
+                    entry_data.update(paired_options)
                     self.hass.config_entries.async_update_entry(
                         self.config_entry,
                         title=str(result.get("instance_name") or self.config_entry.title),
@@ -278,6 +278,7 @@ class PDDashboardBridgeOptionsFlow(config_entries.OptionsFlow):
                         ),
                         CONF_ENTITIES_INTERVAL: int(user_input[CONF_ENTITIES_INTERVAL]),
                         CONF_SEND_ALL_ENTITIES: bool(user_input[CONF_SEND_ALL_ENTITIES]),
+                        **paired_options,
                     },
                 )
 
