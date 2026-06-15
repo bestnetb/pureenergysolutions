@@ -113,4 +113,4 @@ Kod parowania jest jednorazowy. Po parowaniu panel zwraca token agenta, ktory je
 
 ## Aktualny zakres
 
-Ta wersja tylko wysyla dane z HA do panelu. Odbior komend z panelu jest przygotowany w protokole heartbeat, ale integracja jeszcze nie wykonuje komend sterujacych encjami.
+Ta wersja wysyla dane z HA do panelu i wykonuje bezpieczne komendy sterujace z heartbeat: select/input_select.select_option, number/input_number.set_value oraz switch.turn_on/off.

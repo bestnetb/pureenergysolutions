@@ -163,7 +163,11 @@ class BridgeSensor(CoordinatorEntity[PDDashboardBridgeCoordinator], SensorEntity
                 {
                     "heartbeat": data.get("heartbeat") or {},
                     "entities_result": data.get("entities_result") or {},
+                    "command_results": data.get("command_results") or [],
                 }
             )
+
+        if self._description.key == "last_command_count":
+            attributes["command_results"] = data.get("command_results") or []
 
         return attributes

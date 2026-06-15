@@ -36,7 +36,15 @@ from .const import (
 )
 
 LOGGER = logging.getLogger(__name__)
-STATE_DOMAINS_WITH_DATA = {"sensor", "select", "input_select"}
+STATE_DOMAINS_WITH_DATA = {"sensor", "select", "input_select", "number", "input_number", "switch"}
+ALLOWED_COMMAND_SERVICES = {
+    ("select", "select_option"),
+    ("input_select", "select_option"),
+    ("number", "set_value"),
+    ("input_number", "set_value"),
+    ("switch", "turn_on"),
+    ("switch", "turn_off"),
+}
 
 
 class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -60,6 +68,7 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_sent_entities: list[str] = []
         self.last_sent_entity_details: list[dict[str, Any]] = []
         self.last_command_count = 0
+        self.last_command_results: list[dict[str, Any]] = []
         self.last_error: str | None = None
         self._last_entities_sync: datetime | None = None
 
@@ -108,13 +117,17 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 }
             )
             self.last_heartbeat_at = now.isoformat()
-            self.last_command_count = len(heartbeat.get("commands") or [])
+            commands = heartbeat.get("commands") or []
+            self.last_command_count = len(commands) if isinstance(commands, list) else 0
             if heartbeat.get("requires_pairing") or heartbeat.get("status") == "auth_failed":
+                self.last_command_results = []
                 self.last_error = _diagnostic_error(
                     heartbeat,
                     "Heartbeat wymaga ponownego parowania.",
                 )
                 return self._state_payload(heartbeat, None, status="auth_failed")
+
+            self.last_command_results = await self._execute_commands(commands)
 
             if self._should_send_entities(now):
                 try:
@@ -264,6 +277,115 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return payload
 
+    async def _execute_commands(self, commands: Any) -> list[dict[str, Any]]:
+        """Execute safe commands returned by the dashboard heartbeat."""
+
+        if not isinstance(commands, list):
+            return []
+
+        results: list[dict[str, Any]] = []
+        for command in commands[:10]:
+            if not isinstance(command, dict):
+                results.append({"status": "skipped", "reason": "invalid_command"})
+                continue
+
+            try:
+                results.append(await self._execute_ha_service_command(command))
+            except Exception as err:  # noqa: BLE001 - diagnostics must not break heartbeat.
+                LOGGER.warning("PD Dashboard command failed: %s", err)
+                results.append(
+                    {
+                        "id": str(command.get("id") or ""),
+                        "status": "error",
+                        "reason": str(err),
+                    }
+                )
+
+        return results
+
+    async def _execute_ha_service_command(self, command: dict[str, Any]) -> dict[str, Any]:
+        """Execute one whitelisted Home Assistant service command."""
+
+        command_id = str(command.get("id") or "")
+        if command.get("type") != "ha_service":
+            return {"id": command_id, "status": "skipped", "reason": "unsupported_type"}
+
+        target = command.get("target")
+        target = target if isinstance(target, dict) else {}
+        entity_id = str(target.get("entity_id") or command.get("entity_id") or "").strip()
+        if not entity_id or "." not in entity_id:
+            return {"id": command_id, "status": "skipped", "reason": "missing_entity"}
+
+        entity_domain = entity_id.split(".", 1)[0].lower()
+        domain = str(command.get("domain") or entity_domain).strip().lower()
+        service = str(command.get("service") or "").strip().lower()
+        if domain != entity_domain:
+            domain = entity_domain
+
+        if (domain, service) not in ALLOWED_COMMAND_SERVICES:
+            return {
+                "id": command_id,
+                "entity_id": entity_id,
+                "status": "blocked",
+                "service": f"{domain}.{service}",
+            }
+
+        data = command.get("data")
+        data = data if isinstance(data, dict) else {}
+        if self._command_matches_current_state(entity_id, service, data):
+            return {
+                "id": command_id,
+                "entity_id": entity_id,
+                "status": "skipped",
+                "reason": "already_set",
+                "service": f"{domain}.{service}",
+            }
+
+        service_data = dict(data)
+        service_data["entity_id"] = entity_id
+        await self.hass.services.async_call(domain, service, service_data, blocking=True)
+
+        return {
+            "id": command_id,
+            "entity_id": entity_id,
+            "status": "executed",
+            "service": f"{domain}.{service}",
+            "data": data,
+        }
+
+    def _command_matches_current_state(
+        self,
+        entity_id: str,
+        service: str,
+        data: dict[str, Any],
+    ) -> bool:
+        """Return true when executing the command would not change anything."""
+
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return False
+
+        if service == "select_option":
+            option = str(data.get("option") or "")
+            return option != "" and str(state.state) == option
+
+        if service == "set_value":
+            try:
+                current = float(state.state)
+                target = float(data.get("value"))
+            except (TypeError, ValueError):
+                return False
+
+            return abs(current - target) < 0.001
+
+        if service == "turn_on":
+            return str(state.state).lower() == "on"
+
+        if service == "turn_off":
+            return str(state.state).lower() == "off"
+
+        return False
+
     def _state_payload(
         self,
         heartbeat: dict[str, Any] | None,
@@ -294,6 +416,7 @@ class PDDashboardBridgeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_entities_at": self.last_entities_at,
             "last_entities_stored": self.last_entities_stored,
             "last_command_count": self.last_command_count,
+            "command_results": self.last_command_results,
             "heartbeat": heartbeat or {},
             "entities_result": entities_result or {},
             "last_error": self.last_error,
